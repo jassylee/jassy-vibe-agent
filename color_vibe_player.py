@@ -18,11 +18,15 @@ except ImportError:
     HAS_GENAI = False
 
 # ==========================================
-import streamlit as st
+# Fetch from Streamlit Cloud Secrets safely
+# ==========================================
+GLOBAL_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
 
-api_key = st.secrets["GEMINI_API_KEY"]
-
-client = genai.Client(api_key=api_key)
+if HAS_GENAI and GLOBAL_API_KEY:
+    try:
+        client = genai.Client(api_key=GLOBAL_API_KEY)
+    except Exception:
+        pass
 # ==========================================
 
 SEARCH_AUDIO_SUFFIX = "High Quality Audio"
@@ -109,7 +113,7 @@ def _rgb_to_hex(r: int, g: int, b: int) -> str:
     return f"#{r:02x}{g:02x}{b:02x}"
 
 def blend_hex(hex_colors: list[str | None]) -> str:
-    colors =[c for c in hex_colors if c]
+    colors = [c for c in hex_colors if c]
     if not colors:
         return "#0f172a"
     rgbs =[_hex_to_rgb(c) for c in colors]
@@ -123,10 +127,6 @@ def build_youtube_search_url(query: str) -> str:
     return f"https://www.youtube.com/results?search_query={encoded}"
 
 def play_youtube_video(url: str, max_seconds: int) -> None:
-    """
-    Generate an HTML iframe with strict Autoplay directives 
-    so the song actually starts playing when auto-advanced.
-    """
     if "watch?v=" in url:
         video_id = url.split("watch?v=")[-1].split("&")[0]
         embed_url = f"https://www.youtube.com/embed/{video_id}?autoplay=1&start=0&end={max_seconds}"
@@ -142,7 +142,6 @@ def play_youtube_video(url: str, max_seconds: int) -> None:
         """
         components.html(iframe_html, height=420)
     else:
-        # Fallback for general URLs
         try:
             st.video(url, autoplay=True)
         except TypeError:
@@ -234,6 +233,27 @@ def fetch_vibe_from_ai(prompt: str, api_key: str) -> dict:
         st.error(f"AI Generation failed: {e}")
         return {}
 
+# =====================================================================
+# MUST BE DEFINED AT THE GLOBAL LEVEL TO PREVENT AUTO-RERUN BUGS
+# =====================================================================
+@st.fragment(run_every=timedelta(seconds=5))
+def auto_play_next():
+    if "playlist_video_count" not in st.session_state or "now_playing_idx" not in st.session_state:
+        return
+        
+    idx = st.session_state["now_playing_idx"]
+    start = st.session_state.get("song_start_time", time.time())
+    n = st.session_state["playlist_video_count"]
+    auto_adv = st.session_state.get("auto_advance_sec", AUTO_ADVANCE_SECONDS_DEFAULT)
+    
+    if n > 0 and (time.time() - start) >= auto_adv:
+        next_idx = (idx + 1) % n
+        st.session_state["now_playing_idx"] = next_idx
+        st.session_state["now_playing_radio"] = next_idx  # keep radio in sync
+        st.session_state["song_start_time"] = time.time()
+        # Clean rerun syntax to force standard Streamlit update
+        st.rerun()
+
 
 def main() -> None:
     st.set_page_config(page_title="Color Vibe Player", page_icon="🎧", layout="wide")
@@ -243,9 +263,11 @@ def main() -> None:
     # Initialize shared session states
     if "selected_colors" not in st.session_state:
         st.session_state["selected_colors"] =[]
+    if "now_playing_idx" not in st.session_state:
+        st.session_state["now_playing_idx"] = 0
 
     # 1. Choose Application Mode
-    mode = st.radio("Choose Mode", ["🎨 Manual Colors", "🤖 AI Agent Vibe"], horizontal=True)
+    mode = st.radio("Choose Mode",["🎨 Manual Colors", "🤖 AI Agent Vibe"], horizontal=True)
 
     query = ""
     bg_hex = "#0f172a"
@@ -255,7 +277,7 @@ def main() -> None:
 
     # 2. Input Logic (Manual vs. AI)
     if mode == "🎨 Manual Colors":
-        options =[name.title() for name in COLOR_VIBE_MAP.keys()]
+        options = [name.title() for name in COLOR_VIBE_MAP.keys()]
         col_select, col_button = st.columns([3, 1])
         selected = col_select.multiselect(
             "Choose up to 2 colors",
@@ -268,7 +290,7 @@ def main() -> None:
             keys = list(COLOR_VIBE_MAP.keys())
             if len(keys) >= 2:
                 c1, c2 = random.sample(keys, 2)
-                st.session_state["selected_colors"] = [c1.title(), c2.title()]
+                st.session_state["selected_colors"] =[c1.title(), c2.title()]
                 st.rerun()
 
         st.session_state["selected_colors"] = selected
@@ -292,10 +314,10 @@ def main() -> None:
         
         col_api, col_prompt = st.columns([1, 2])
         
-        # Pre-fill with the hardcoded API key if available
-        api_key = col_api.text_input(
+        # Pre-fill with the Streamlit Cloud advanced setting API key if available
+        api_key_input = col_api.text_input(
             "Gemini API Key", 
-            value=GEMINI_API_KEY, 
+            value=GLOBAL_API_KEY, 
             type="password", 
             help="Get your API key from Google AI Studio"
         )
@@ -307,13 +329,13 @@ def main() -> None:
         )
 
         if st.button("Generate AI Vibe", type="primary"):
-            if not api_key:
-                st.warning("Please enter your Gemini API Key.")
+            if not api_key_input:
+                st.warning("Please enter your Gemini API Key or set it in Streamlit Cloud Advanced Settings.")
             elif not user_prompt:
                 st.warning("Please describe how you are feeling.")
             else:
                 with st.spinner("Agent is analyzing your vibe and inferring parameters..."):
-                    ai_data = fetch_vibe_from_ai(user_prompt, api_key)
+                    ai_data = fetch_vibe_from_ai(user_prompt, api_key_input)
                     if ai_data:
                         st.session_state["ai_data"] = ai_data
 
@@ -329,11 +351,14 @@ def main() -> None:
 
 
     # 3. Apply the generated Vibe (Dynamic UI + Video Fetch)
+
     set_dynamic_theme(bg_hex)
+
 
     if not query:
         st.sidebar.markdown("<div class='sidebar-note'>Playlist will appear here.</div>", unsafe_allow_html=True)
-        return
+    
+        st.stop()
 
     st.subheader("Vibe")
     st.write(vibe_label)
@@ -345,7 +370,7 @@ def main() -> None:
     if not videos:
         st.error("No videos found. Try different colors or AI prompts.")
         st.sidebar.write("No playlist to show.")
-        return
+        st.stop()
 
     # Sync session state with current playlist (reset when query changes)
     if st.session_state.get("playlist_query") != query:
@@ -353,9 +378,10 @@ def main() -> None:
         st.session_state["now_playing_idx"] = 0
         st.session_state["now_playing_radio"] = 0
         st.session_state["song_start_time"] = time.time()
+        
     st.session_state["playlist_video_count"] = len(videos)
 
-    # Auto-advance to next song after N seconds
+    # Auto-advance settings
     auto_advance_sec = st.sidebar.number_input(
         "Auto-play next after (sec)",
         min_value=10,
@@ -366,35 +392,28 @@ def main() -> None:
     )
     st.session_state["auto_advance_sec"] = auto_advance_sec
 
-    @st.fragment(run_every=timedelta(seconds=5))
-    def auto_play_next():
-        idx = st.session_state["now_playing_idx"]
-        start = st.session_state["song_start_time"]
-        n = st.session_state["playlist_video_count"]
-        if n and (time.time() - start) >= st.session_state["auto_advance_sec"]:
-            next_idx = (idx + 1) % n
-            st.session_state["now_playing_idx"] = next_idx
-            st.session_state["now_playing_radio"] = next_idx  # keep radio in sync
-            st.session_state["song_start_time"] = time.time()
-            # Force App Rerun out of fragment so the main window updates
-            try:
-                st.rerun(scope="app")
-            except TypeError:
-                st.rerun()
-
+    # Call Fragment listener
     auto_play_next()
 
     # 4. Playlist & Player Display
     st.sidebar.subheader("Playlist (Top 10)")
-    titles =[f"{i+1}. {v['title']}" for i, v in enumerate(videos)]
+    
+    titles = [f"{i+1}. {v.get('title', 'Unknown')}" for i, v in enumerate(videos)]
+    
+ 
+    safe_index = st.session_state["now_playing_idx"]
+    if safe_index >= len(videos):
+        safe_index = 0
+
     now_playing_idx = st.sidebar.radio(
         "Now playing",
         options=list(range(len(videos))),
         format_func=lambda i: titles[i],
         key="now_playing_radio",
-        index=st.session_state["now_playing_idx"],
+        index=safe_index,
     )
 
+    # Update state if changed
     if now_playing_idx != st.session_state["now_playing_idx"]:
         st.session_state["now_playing_idx"] = now_playing_idx
         st.session_state["song_start_time"] = time.time()
@@ -402,16 +421,12 @@ def main() -> None:
     st.subheader("Now playing")
     st.write(titles[st.session_state["now_playing_idx"]])
     
-    # Render with custom component wrapper so autoplay works universally
     play_youtube_video(
         videos[st.session_state["now_playing_idx"]]["url"], MAX_PLAY_SECONDS
     )
 
     with st.expander("See full playlist"):
         for i, v in enumerate(videos, start=1):
-            st.markdown(f"**{i}.** {v['title']}")
+            st.markdown(f"**{i}.** {v.get('title', 'Unknown')}")
 
     st.caption(f"If embeds fail, open search results: {build_youtube_search_url(query)}")
-
-if __name__ == "__main__":
-    main()
