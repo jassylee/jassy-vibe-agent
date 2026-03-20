@@ -113,7 +113,7 @@ def _rgb_to_hex(r: int, g: int, b: int) -> str:
     return f"#{r:02x}{g:02x}{b:02x}"
 
 def blend_hex(hex_colors: list[str | None]) -> str:
-    colors = [c for c in hex_colors if c]
+    colors =[c for c in hex_colors if c]
     if not colors:
         return "#0f172a"
     rgbs =[_hex_to_rgb(c) for c in colors]
@@ -129,7 +129,8 @@ def build_youtube_search_url(query: str) -> str:
 def play_youtube_video(url: str, max_seconds: int) -> None:
     if "watch?v=" in url:
         video_id = url.split("watch?v=")[-1].split("&")[0]
-        embed_url = f"https://www.youtube.com/embed/{video_id}?autoplay=1&start=0&end={max_seconds}"
+        # FIX: Added unique timestamp `_t` to force the browser to ignore the cached 'ended' state
+        embed_url = f"https://www.youtube.com/embed/{video_id}?autoplay=1&start=0&end={max_seconds}&_t={int(time.time())}"
         
         iframe_html = f"""
         <iframe width="100%" height="400" 
@@ -163,7 +164,7 @@ def fetch_videos(query: str, limit: int = 10) -> list[dict]:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(search_query, download=False)
 
-        entries = info.get("entries") or []
+        entries = info.get("entries") or[]
         videos: list[dict] =[]
         for entry in entries:
             url = entry.get("webpage_url") or entry.get("url")
@@ -277,7 +278,7 @@ def main() -> None:
 
     # 2. Input Logic (Manual vs. AI)
     if mode == "🎨 Manual Colors":
-        options = [name.title() for name in COLOR_VIBE_MAP.keys()]
+        options =[name.title() for name in COLOR_VIBE_MAP.keys()]
         col_select, col_button = st.columns([3, 1])
         selected = col_select.multiselect(
             "Choose up to 2 colors",
@@ -387,15 +388,13 @@ def main() -> None:
     st.sidebar.subheader("Playlist (Top 10)")
     titles =[f"{i+1}. {v.get('title', 'Unknown')}" for i, v in enumerate(videos)]
     
-
+    # FIX: Removed `index=` property to prevent Streamlit widget conflicts. The `key=` acts as the single source of truth.
     now_playing_idx = st.sidebar.radio(
         "Now playing",
         options=list(range(len(videos))),
         format_func=lambda i: titles[i],
-        key="now_playing_radio",
-        index=st.session_state.get("now_playing_idx", 0) if st.session_state.get("now_playing_idx", 0) < len(videos) else 0
+        key="now_playing_radio"
     )
-
 
     if now_playing_idx != st.session_state.get("now_playing_idx"):
         st.session_state["now_playing_idx"] = now_playing_idx
@@ -404,7 +403,6 @@ def main() -> None:
     st.subheader("Now playing")
     st.write(titles[st.session_state["now_playing_idx"]])
     
-
     current_video_url = videos[st.session_state["now_playing_idx"]].get("url")
     if current_video_url:
         play_youtube_video(current_video_url, MAX_PLAY_SECONDS)
