@@ -397,13 +397,13 @@ def main() -> None:
 
     # 4. Playlist & Player Display
     st.sidebar.subheader("Playlist (Top 10)")
-    
     titles = [f"{i+1}. {v.get('title', 'Unknown')}" for i, v in enumerate(videos)]
     
- 
-    safe_index = st.session_state["now_playing_idx"]
+
+    safe_index = st.session_state.get("now_playing_idx", 0)
     if safe_index >= len(videos):
         safe_index = 0
+
 
     now_playing_idx = st.sidebar.radio(
         "Now playing",
@@ -413,17 +413,18 @@ def main() -> None:
         index=safe_index,
     )
 
-    # Update state if changed
-    if now_playing_idx != st.session_state["now_playing_idx"]:
+
+    if now_playing_idx != st.session_state.get("now_playing_idx"):
         st.session_state["now_playing_idx"] = now_playing_idx
         st.session_state["song_start_time"] = time.time()
 
     st.subheader("Now playing")
     st.write(titles[st.session_state["now_playing_idx"]])
     
-    play_youtube_video(
-        videos[st.session_state["now_playing_idx"]]["url"], MAX_PLAY_SECONDS
-    )
+
+    current_video_url = videos[st.session_state["now_playing_idx"]].get("url")
+    if current_video_url:
+        play_youtube_video(current_video_url, MAX_PLAY_SECONDS)
 
     with st.expander("See full playlist"):
         for i, v in enumerate(videos, start=1):
