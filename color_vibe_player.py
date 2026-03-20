@@ -359,9 +359,33 @@ def main() -> None:
         st.error("No videos found. Try different colors or AI prompts.")
         return
 
+    # =====================================================================
+    # RESTORED: Sync state, setup auto-advance UI, and trigger the listener
+    # =====================================================================
+    if st.session_state.get("playlist_query") != query:
+        st.session_state["playlist_query"] = query
+        st.session_state["now_playing_idx"] = 0
+        st.session_state["now_playing_radio"] = 0
+        st.session_state["song_start_time"] = time.time()
+        
+    st.session_state["playlist_video_count"] = len(videos)
+
+    st.session_state["auto_advance_sec"] = st.sidebar.number_input(
+        "Auto-play next after (sec)",
+        min_value=10,
+        max_value=600,
+        value=st.session_state.get("auto_advance_sec", AUTO_ADVANCE_SECONDS_DEFAULT),
+        step=10,
+        help="Advance to the next song after this many seconds.",
+    )
+
+    # Trigger the @st.fragment listener to actively poll the timer
+    auto_play_next()
+    # =====================================================================
+
     # --- 4. Playlist & Player Display  ---
     st.sidebar.subheader("Playlist (Top 10)")
-    titles = [f"{i+1}. {v.get('title', 'Unknown')}" for i, v in enumerate(videos)]
+    titles =[f"{i+1}. {v.get('title', 'Unknown')}" for i, v in enumerate(videos)]
     
 
     now_playing_idx = st.sidebar.radio(
