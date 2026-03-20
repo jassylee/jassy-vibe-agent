@@ -397,3 +397,9 @@ def main() -> None:
     with st.expander("See full playlist"):
         for i, v in enumerate(videos, start=1):
             st.markdown(f"**{i}.** {v.get('title', 'Unknown')}")
+
+    st.caption(f"If embeds fail, open search results: {build_youtube_search_url(query)}")
+
+
+if __name__ == "__main__":
+    main()
