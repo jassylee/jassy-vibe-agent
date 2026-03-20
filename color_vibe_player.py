@@ -350,15 +350,12 @@ def main() -> None:
             st.info("Awaiting your natural language input above...")
 
 
-    # 3. Apply the generated Vibe (Dynamic UI + Video Fetch)
-
+    # 3. Apply the generated Vibe
     set_dynamic_theme(bg_hex)
-
 
     if not query:
         st.sidebar.markdown("<div class='sidebar-note'>Playlist will appear here.</div>", unsafe_allow_html=True)
-    
-        st.stop()
+        return 
 
     st.subheader("Vibe")
     st.write(vibe_label)
@@ -369,48 +366,19 @@ def main() -> None:
 
     if not videos:
         st.error("No videos found. Try different colors or AI prompts.")
-        st.sidebar.write("No playlist to show.")
-        st.stop()
+        return
 
-    # Sync session state with current playlist (reset when query changes)
-    if st.session_state.get("playlist_query") != query:
-        st.session_state["playlist_query"] = query
-        st.session_state["now_playing_idx"] = 0
-        st.session_state["now_playing_radio"] = 0
-        st.session_state["song_start_time"] = time.time()
-        
-    st.session_state["playlist_video_count"] = len(videos)
-
-    # Auto-advance settings
-    auto_advance_sec = st.sidebar.number_input(
-        "Auto-play next after (sec)",
-        min_value=10,
-        max_value=600,
-        value=st.session_state.get("auto_advance_sec", AUTO_ADVANCE_SECONDS_DEFAULT),
-        step=10,
-        help="Advance to the next song after this many seconds.",
-    )
-    st.session_state["auto_advance_sec"] = auto_advance_sec
-
-    # Call Fragment listener
-    auto_play_next()
-
-    # 4. Playlist & Player Display
+    # --- 4. Playlist & Player Display  ---
     st.sidebar.subheader("Playlist (Top 10)")
     titles = [f"{i+1}. {v.get('title', 'Unknown')}" for i, v in enumerate(videos)]
     
-
-    safe_index = st.session_state.get("now_playing_idx", 0)
-    if safe_index >= len(videos):
-        safe_index = 0
-
 
     now_playing_idx = st.sidebar.radio(
         "Now playing",
         options=list(range(len(videos))),
         format_func=lambda i: titles[i],
         key="now_playing_radio",
-        index=safe_index,
+        index=st.session_state.get("now_playing_idx", 0) if st.session_state.get("now_playing_idx", 0) < len(videos) else 0
     )
 
 
@@ -429,5 +397,3 @@ def main() -> None:
     with st.expander("See full playlist"):
         for i, v in enumerate(videos, start=1):
             st.markdown(f"**{i}.** {v.get('title', 'Unknown')}")
-
-    st.caption(f"If embeds fail, open search results: {build_youtube_search_url(query)}")
