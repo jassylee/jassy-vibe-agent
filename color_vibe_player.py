@@ -307,35 +307,26 @@ def main() -> None:
             )
         else:
             st.info("Select 1 or 2 colors to generate a playlist.")
-
     else:
-        # AI AGENT MODE
+        # AI AGENT MODE - Clean Professional Version
         st.markdown("**Tell the AI Agent how you are feeling, and it will pick the perfect color and music.**")
         
-        col_api, col_prompt = st.columns([1, 2])
-        
-        # Pre-fill with the Streamlit Cloud advanced setting API key if available
-        api_key_input = col_api.text_input(
-            "Gemini API Key", 
-            value=GLOBAL_API_KEY, 
-            type="password", 
-            help="Get your API key from Google AI Studio"
-        )
-        
-        user_prompt = col_prompt.text_area(
+
+        user_prompt = st.text_area(
             "Your Situation / Vibe:", 
             placeholder="e.g., I'm so stressed at work today, I want to go to the beach.",
-            height=68
+            height=100
         )
 
         if st.button("Generate AI Vibe", type="primary"):
-            if not api_key_input:
-                st.warning("Please enter your Gemini API Key or set it in Streamlit Cloud Advanced Settings.")
+
+            if not GLOBAL_API_KEY:
+                st.error("System Error: Gemini API Key is missing in Cloud Secrets.")
             elif not user_prompt:
-                st.warning("Please describe how you are feeling.")
+                st.warning("Please describe how you are feeling first!")
             else:
-                with st.spinner("Agent is analyzing your vibe and inferring parameters..."):
-                    ai_data = fetch_vibe_from_ai(user_prompt, api_key_input)
+                with st.spinner("Agent is analyzing your vibe..."):
+                    ai_data = fetch_vibe_from_ai(user_prompt, GLOBAL_API_KEY)
                     if ai_data:
                         st.session_state["ai_data"] = ai_data
 
@@ -345,7 +336,7 @@ def main() -> None:
             query = ai_data.get("query", f"Music {SEARCH_AUDIO_SUFFIX}")
             vibe_label = "🤖 " + ai_data.get("vibe_label", "AI Generated Vibe")
             
-            st.markdown(f"<span class='color-pill'>AI Inferred: {bg_hex}</span>", unsafe_allow_html=True)
+            st.markdown(f"<span class='color-pill'>AI Inferred Color: {bg_hex}</span>", unsafe_allow_html=True)
         else:
             st.info("Awaiting your natural language input above...")
 
