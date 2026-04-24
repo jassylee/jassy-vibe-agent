@@ -33,6 +33,9 @@ SEARCH_AUDIO_SUFFIX = "High Quality Audio"
 AUTO_ADVANCE_SECONDS_DEFAULT = 30  # seconds before auto-playing next song
 MAX_PLAY_SECONDS = 180  # hard cap on how long each song plays
 
+def is_valid_hex(h: str) -> bool:
+    return bool(re.match(r'^#[0-9a-fA-F]{6}$', h))
+
 # 20 colors → Mood + UI hex color
 COLOR_VIBE_MAP: dict[str, dict[str, str]] = {
     "red": {"mood": "Energetic / Passionate", "hex": "#e53935"},
@@ -177,6 +180,8 @@ def fetch_videos(query: str, limit: int = 10) -> list[dict]:
         return[]
 
 def set_dynamic_theme(bg_hex: str) -> None:
+    if not is_valid_hex(bg_hex):
+        bg_hex = "#0f172a"
     st.markdown(
         f"""
 <style>
@@ -333,7 +338,8 @@ def main() -> None:
 
         if "ai_data" in st.session_state:
             ai_data = st.session_state["ai_data"]
-            bg_hex = ai_data.get("hex", "#0f172a")
+            raw_hex = ai_data.get("hex", "")
+            bg_hex = raw_hex if is_valid_hex(raw_hex) else "#0f172a"
             query = ai_data.get("query", f"Music {SEARCH_AUDIO_SUFFIX}")
             vibe_label = "🤖 " + ai_data.get("vibe_label", "AI Generated Vibe")
             
